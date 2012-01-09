@@ -1,0 +1,115 @@
+#!/usr/bin/python2
+
+import xml.dom.minidom
+import re
+
+
+class Marker:
+	def __init__(self, element):
+		self.name = element.getAttribute("name")
+		self.start = int(element.getAttribute("start"))
+		self.end = int(element.getAttribute("end"))
+		self.locked = (element.getAttribute("locked") == "yes")
+
+	def dump(self):
+		print self.name, self.start, self.end, ("Locked" if self.locked else "Unlocked")
+
+
+class Source:
+	def __init__(self, element):
+		self.id = int(element.getAttribute("id"))
+		self.name = element.getAttribute("name")
+	
+	def dump(self):
+		print self.id, self.name
+
+
+class Diskstream:
+	def __init__(self, element):
+		self.id = int(element.getAttribute("id"))
+		self.playlist = element.getAttribute("playlist")
+		self.name = element.getAttribute("name")
+
+
+class Region:
+	def __init__(self, element):
+		self.id = int(element.getAttribute("id"))
+		self.name = element.getAttribute("name")
+		self.start = int(element.getAttribute("start"))
+		self.length = int(element.getAttribute("length"))
+
+
+class Playlist:
+	def __init__(self, element):
+		self.name = element.getAttribute("name")
+
+
+class Session:
+	def parse_markers(self, element):
+		for marker_elt in element.childNodes:
+			if marker_elt.nodeType != xml.dom.Node.ELEMENT_NODE:
+				continue
+			if marker_elt.tagName != "Location":
+				continue
+			if not re.match(".*IsMark.*", marker_elt.getAttribute("flags")):
+				continue
+			self.markers.append(Marker(marker_elt))
+	
+	def parse_ided(self, parent_element, tag_name, the_class, the_dict):
+		for element in parent_element.childNodes:
+			if element.nodeType != xml.dom.Node.ELEMENT_NODE:
+				continue
+			if element.tagName != tag_name:
+				continue
+			obj = the_class(element)
+			the_dict[obj.id] = obj
+
+	def parse_sources(self, parent_element):
+		for element in parent_element.childNodes:
+			if element.nodeType != xml.dom.Node.ELEMENT_NODE:
+				continue
+			if element.tagName != "Source":
+				continue
+			source = Source(element)
+			self.sources[source.id] = source
+
+	def parse_diskstreams(self, parent_element):
+		for element in parent_element.childNodes:
+			if element.nodeType != xml.dom.Node.ELEMENT_NODE:
+				continue
+			if element.tagName != "DiskStream":
+				continue
+			diskstream = DiskStream(element)
+			self.diskstreams[diskstream.id] = diskstream
+
+	def __init__(self, filename):
+		self.markers = []
+		self.sources = {}
+		self.diskstreams = {}
+
+		doc = xml.dom.minidom.parse(filename)
+		session = doc.documentElement
+		element = session.firstChild
+		while element:
+			if element.nodeType == xml.dom.Node.ELEMENT_NODE:
+				name = element.tagName
+				if name == "Locations":
+					self.parse_markers(element)
+					for marker in self.markers:
+						marker.dump()
+				elif name == "Sources":
+					self.parse_ided(element, "Source", Source, self.sources)
+				elif name == "DiskStreams":
+					self.parse_diskstreams(element)
+				elif name == "Route":
+					pass
+			element = element.nextSibling
+
+
+def convert(filename):
+	session = Session(filename);
+	for source in session.sources.values():
+		source.dump()
+
+convert("Radio Chris.ardour")
+
