@@ -22,6 +22,9 @@ def parse_named(parent_element, tag_name, the_class, the_dict):
 		obj = the_class(element)
 		the_dict[obj.name] = obj
 
+def bool_attribute(element, name):
+	return element.getAttribute(name) == "yes"
+
 def dump_ided(the_dict):
 	for obj in the_dict.values():
 		obj.dump()
@@ -39,7 +42,7 @@ class Marker:
 		self.name = element.getAttribute("name")
 		self.start = int(element.getAttribute("start"))
 		self.end = int(element.getAttribute("end"))
-		self.locked = (element.getAttribute("locked") == "yes")
+		self.locked = bool_attribute(element, "locked")
 
 	def dump(self):
 		print self.name, self.start, self.end, ("Locked" if self.locked else "Unlocked")
@@ -87,6 +90,24 @@ class Playlist:
 		print self.name + ":"
 		dump_ided(self.regions)
 		print "-----"
+
+
+class Route:
+	def __init__(self, element):
+		# Routes and IOs seem to be kinda the same thing.
+		self.name = ""
+		self.gain = 1.0
+		self.pan = 0.5
+		self.muted = bool_attribute(element, "muted")
+		self.soloed = bool_attribute(element, "soloed")
+		self.inverted = bool_attribute(element, "phase-invert")
+		self.diskstreamID = int(element.getAttribute("diskstream-id"))
+		for child in element.childNodes:
+			if child.nodeType != xml.dom.Node.ELEMENT_NODE:
+				continue
+			tag_name = child.tagName
+			if tag_name == "IO":
+				self.gain = int(child.getAttribute("gain"))
 
 
 class Session:
