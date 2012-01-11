@@ -1,7 +1,6 @@
 #!/usr/bin/python2
 
 import xml.dom.minidom
-import re
 
 
 def parse_ided(parent_element, tag_name, the_class, the_dict):
@@ -32,6 +31,9 @@ def dump_ided(the_dict):
 def dump_named(the_dict):
 	for obj in the_dict.values():
 		obj.dump()
+
+def bool_dump(value, name):
+	return name if value else "un" + name
 
 def quote(str):
 	return "\"" + str + "\""
@@ -94,20 +96,34 @@ class Playlist:
 
 class Route:
 	def __init__(self, element):
-		# Routes and IOs seem to be kinda the same thing.
 		self.name = ""
 		self.gain = 1.0
 		self.pan = 0.5
 		self.muted = bool_attribute(element, "muted")
 		self.soloed = bool_attribute(element, "soloed")
 		self.inverted = bool_attribute(element, "phase-invert")
-		self.diskstreamID = int(element.getAttribute("diskstream-id"))
+		self.diskstreamID = 0
+		diskstream_id = element.getAttribute("diskstream-id")
+		if diskstream_id:
+			self.diskstreamID = int(element.getAttribute("diskstream-id"))
 		for child in element.childNodes:
 			if child.nodeType != xml.dom.Node.ELEMENT_NODE:
 				continue
 			tag_name = child.tagName
 			if tag_name == "IO":
-				self.gain = int(child.getAttribute("gain"))
+				outputs = child.getAttribute("outputs")
+				if ("{master/" in outputs) or (child.getAttribute("name") == "master"):
+					self.name = child.getAttribute("name")
+					self.gain = float(child.getAttribute("gain"))
+					panner = child.getElementsByTagName("Panner")[0]
+					if panner:
+						stream_panner = panner.getElementsByTagName("StreamPanner")[0]
+						if stream_panner:
+							self.pan = float(stream_panner.getAttribute("x"))
+
+	def dump(self):
+		print self.name + ":", self.diskstreamID, self.gain, self.pan
+		print " ", bool_dump(self.muted, "muted"), bool_dump(self.soloed, "soloed"), bool_dump(self.inverted, "inverted")
 
 
 class Session:
@@ -117,7 +133,7 @@ class Session:
 				continue
 			if marker_elt.tagName != "Location":
 				continue
-			if not re.match(".*IsMark.*", marker_elt.getAttribute("flags")):
+			if not "IsMark" in marker_elt.getAttribute("flags"):
 				continue
 			self.markers.append(Marker(marker_elt))
 	
@@ -133,6 +149,8 @@ class Session:
 		dump_ided(self.diskstreams)
 		print "\nPlaylists:"
 		dump_named(self.playlists)
+		print "\nRoutes:"
+		dump_named(self.routes)
 
 	def __init__(self, filename):
 		self.markers = []
@@ -140,6 +158,7 @@ class Session:
 		self.regions = {}
 		self.diskstreams = {}
 		self.playlists = {}
+		self.routes = {}
 
 		doc = xml.dom.minidom.parse(filename)
 		session = doc.documentElement
@@ -154,11 +173,11 @@ class Session:
 				elif name == "Regions":
 					parse_ided(element, "Region", Region, self.regions)
 				elif name == "DiskStreams":
-					parse_ided(element, "AudioDiskstream", Diskstream, self.diskstreams);
+					parse_ided(element, "AudioDiskstream", Diskstream, self.diskstreams)
 				elif name == "Playlists":
-					parse_named(element, "Playlist", Playlist, self.playlists);
-				elif name == "Route":
-					pass
+					parse_named(element, "Playlist", Playlist, self.playlists)
+				elif name == "Routes":
+					parse_named(element, "Route", Route, self.routes)
 			element = element.nextSibling
 
 
