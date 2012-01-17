@@ -21,6 +21,15 @@ def parse_named(parent_element, tag_name, the_class, the_dict):
 		obj = the_class(element)
 		the_dict[obj.name] = obj
 
+def parse_list(parent_element, tag_name, the_class, the_list):
+	for element in parent_element.childNodes:
+		if element.nodeType != xml.dom.Node.ELEMENT_NODE:
+			continue
+		if element.tagName != tag_name:
+			continue
+		obj = the_class(element)
+		the_list.append(obj)
+
 def bool_attribute(element, name):
 	return element.getAttribute(name) == "yes"
 
@@ -30,6 +39,10 @@ def dump_ided(the_dict):
 
 def dump_named(the_dict):
 	for obj in the_dict.values():
+		obj.dump()
+
+def dump_list(the_list):
+	for obj in the_list:
 		obj.dump()
 
 def bool_dump(value, name):
@@ -95,6 +108,17 @@ class Playlist:
 
 
 class Route:
+	def parse_order(self, element):
+		order_attr = element.getAttribute("order-keys")
+		if not order_attr:
+			return 0
+		for key_val in order_attr.split(":"):
+			pair = key_val.split("=")
+			key = pair[0]
+			value = pair[1]
+			if key == "editor":
+				return int(value)
+
 	def __init__(self, element):
 		self.name = ""
 		self.gain = 1.0
@@ -102,6 +126,7 @@ class Route:
 		self.muted = bool_attribute(element, "muted")
 		self.soloed = bool_attribute(element, "soloed")
 		self.inverted = bool_attribute(element, "phase-invert")
+		self.order = self.parse_order(element)
 		self.diskstreamID = 0
 		diskstream_id = element.getAttribute("diskstream-id")
 		if diskstream_id:
@@ -122,7 +147,7 @@ class Route:
 							self.pan = float(stream_panner.getAttribute("x"))
 
 	def dump(self):
-		print self.name + ":", self.diskstreamID, self.gain, self.pan
+		print self.name, "[" + str(self.order) + "]:", self.diskstreamID, self.gain, self.pan
 		print " ", bool_dump(self.muted, "muted"), bool_dump(self.soloed, "soloed"), bool_dump(self.inverted, "inverted")
 
 
@@ -150,7 +175,7 @@ class Session:
 		print "\nPlaylists:"
 		dump_named(self.playlists)
 		print "\nRoutes:"
-		dump_named(self.routes)
+		dump_list(self.routes)
 
 	def __init__(self, filename):
 		self.markers = []
@@ -158,7 +183,7 @@ class Session:
 		self.regions = {}
 		self.diskstreams = {}
 		self.playlists = {}
-		self.routes = {}
+		self.routes = []
 
 		doc = xml.dom.minidom.parse(filename)
 		session = doc.documentElement
@@ -177,8 +202,10 @@ class Session:
 				elif name == "Playlists":
 					parse_named(element, "Playlist", Playlist, self.playlists)
 				elif name == "Routes":
-					parse_named(element, "Route", Route, self.routes)
+					parse_list(element, "Route", Route, self.routes)
 			element = element.nextSibling
+
+		self.routes.sort(key = lambda route: route.order)
 
 
 def convert(filename):
