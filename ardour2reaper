@@ -163,6 +163,7 @@ class Session:
 			self.markers.append(Marker(marker_elt))
 	
 	def dump(self):
+		print "Sample rate:", self.sample_rate
 		print "Markers:"
 		for marker in self.markers:
 			marker.dump()
@@ -187,6 +188,7 @@ class Session:
 
 		doc = xml.dom.minidom.parse(filename)
 		session = doc.documentElement
+		self.sample_rate = int(session.getAttribute("sample-rate"))
 		element = session.firstChild
 		while element:
 			if element.nodeType == xml.dom.Node.ELEMENT_NODE:
