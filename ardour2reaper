@@ -2,6 +2,12 @@
 
 import xml.dom.minidom
 import sys, uuid
+from collections import deque
+
+
+def show_usage():
+	print "Usage: ardour2reaper [-d] <file>..."
+	print "  -d  Dump session info instead of converting."
 
 
 def parse_ided(parent_element, tag_name, the_class, the_dict):
@@ -234,9 +240,12 @@ class Session:
 
 def convert(filename):
 	session = Session(filename)
-	# session.dump()
 	out = open("out", "w")
 	session.emit_rpp(out)
+
+def dump_session(filename):
+	session = Session(filename)
+	session.dump()
 
 
 project_header = """
@@ -356,6 +365,24 @@ track_header = """
     MAINSEND 1 0"""
 track_footer = """	>"""
 
-# sys.argv[1] is the first argument... list.pop[0] pops the front...
-convert("Radio Chris.ardour")
+
+args = deque(sys.argv)
+args.popleft()
+dumping = False
+did_something = False
+while len(args) > 0:
+	arg = args.popleft()
+	if arg == "-d":
+		dumping = True
+	elif arg == "--help":
+		show_usage()
+	else:
+		if dumping:
+			dump_session(arg)
+		else:
+			convert(arg)
+		did_something = True
+if not did_something:
+	show_usage()
+			
 
