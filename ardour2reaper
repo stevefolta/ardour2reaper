@@ -123,6 +123,9 @@ class Plugin:
 			io = redirect.getElementsByTagName("IO")[0]
 			if io:
 				self.name = io.getAttribute("name")
+	
+	def dump(self):
+		print "   ", self.name
 
 
 class Route:
@@ -192,6 +195,10 @@ class Route:
 	def dump(self):
 		print self.name, "[" + str(self.order) + "]:", self.diskstreamID, self.gain, self.pan
 		print " ", bool_dump(self.muted, "muted"), bool_dump(self.soloed, "soloed"), bool_dump(self.inverted, "inverted")
+		if len(self.plugins) > 0:
+			print "  Plugins:"
+			for plugin in self.plugins:
+				plugin.dump()
 
 
 class Session:
