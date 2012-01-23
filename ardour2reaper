@@ -242,7 +242,13 @@ class Session:
 
 def convert(filename):
 	session = Session(filename)
-	out = open("out", "w")
+	split_name = filename.rsplit(".", 1)
+	if len(split_name) == 1:
+		split_name.append("RPP")
+	else:
+		split_name[-1] = "RPP"
+	out_filename = ".".join(split_name)
+	out = open(out_filename, "w")
 	session.emit_rpp(out)
 
 def dump_session(filename):
