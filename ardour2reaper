@@ -1,7 +1,7 @@
 #!/usr/bin/python2
 
 import xml.dom.minidom
-import sys
+import sys, uuid
 
 
 def parse_ided(parent_element, tag_name, the_class, the_dict):
@@ -121,7 +121,36 @@ class Route:
 				return int(value)
 
 	def emit_rpp(self, out):
-		pass
+		# Skip master, that's handled separately.
+		if self.name == "master":
+			return
+
+		guid = uuid.uuid4()
+		print >> out, """
+  <TRACK '{guid}'
+    NAME "{this.name}"
+    PEAKCOL 16576
+    BEAT -1
+    AUTOMODE 1
+    VOLPAN {this.gain} 0.00000000000000 -1.00000000000000 -1.00000000000000 1.00000000000000
+    MUTESOLO 0 0 0
+    IPHASE 0
+    ISBUS 0 0
+    BUSCOMP 0 0
+    SHOWINMIX 1 0.666700 0.500000 1 0.500000 -1 -1 -1
+    FREEMODE 0
+    SEL 0
+    REC 0 2 0 0 0 0 0
+    VU 2
+    TRACKHEIGHT 0 0
+    INQ 0 0 0 0.5000000000 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {guid}
+    PERF 0
+    MIDIOUT -1
+    MAINSEND 1 0
+	>""".format(guid = guid, this = self)
 
 	def __init__(self, element):
 		self.name = ""
