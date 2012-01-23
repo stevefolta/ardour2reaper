@@ -179,6 +179,9 @@ class Route:
 		# Emit.
 		fmt_vars = { "track": self }
 		fmt_vars["guid"] = "{" + str(uuid.uuid4()) + "}"
+		fmt_vars["pan"] = self.pan * 2.0 - 1.0
+			# Ardour pans are 0.0 - 1.0 (0.5 at center), Reaper is -1.0 - 1.0 (0.0 center)
+		fmt_vars["polarity"] = 1 if self.inverted else 0
 		print >> out, track_header.format(**fmt_vars)
 		print >> out, track_footer
 
@@ -385,9 +388,9 @@ track_header = """
     PEAKCOL 16576
     BEAT -1
     AUTOMODE 1
-    VOLPAN {track.gain} 0.00000000000000 -1.00000000000000 -1.00000000000000 1.00000000000000
+    VOLPAN {track.gain} {pan} -1.00000000000000 -1.00000000000000 1.00000000000000
     MUTESOLO {track.muted_int} 0 0
-    IPHASE 0
+    IPHASE {polarity}
     ISBUS 0 0
     BUSCOMP 0 0
     SHOWINMIX 1 0.666700 0.500000 1 0.500000 -1 -1 -1

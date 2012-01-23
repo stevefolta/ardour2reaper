@@ -1,4 +1,7 @@
 *.ardour
 *.RPP
+
+# Stuff I used during my development, not applicable to anyone else:
 out
+send-rpp
 
