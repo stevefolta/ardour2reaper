@@ -10,31 +10,31 @@ def show_usage():
 	print "  -d  Dump session info instead of converting."
 
 
-def parse_ided(parent_element, tag_name, the_class, the_dict):
+def parse_ided(parent_element, tag_name, the_class, the_dict, session):
 	for element in parent_element.childNodes:
 		if element.nodeType != xml.dom.Node.ELEMENT_NODE:
 			continue
 		if element.tagName != tag_name:
 			continue
-		obj = the_class(element)
+		obj = the_class(element, session)
 		the_dict[obj.id] = obj
 
-def parse_named(parent_element, tag_name, the_class, the_dict):
+def parse_named(parent_element, tag_name, the_class, the_dict, session):
 	for element in parent_element.childNodes:
 		if element.nodeType != xml.dom.Node.ELEMENT_NODE:
 			continue
 		if element.tagName != tag_name:
 			continue
-		obj = the_class(element)
+		obj = the_class(element, session)
 		the_dict[obj.name] = obj
 
-def parse_list(parent_element, tag_name, the_class, the_list):
+def parse_list(parent_element, tag_name, the_class, the_list, session):
 	for element in parent_element.childNodes:
 		if element.nodeType != xml.dom.Node.ELEMENT_NODE:
 			continue
 		if element.tagName != tag_name:
 			continue
-		obj = the_class(element)
+		obj = the_class(element, session)
 		the_list.append(obj)
 
 def bool_attribute(element, name):
@@ -60,7 +60,7 @@ def quote(str):
 
 
 class Marker:
-	def __init__(self, element):
+	def __init__(self, element, session):
 		self.name = element.getAttribute("name")
 		self.start = int(element.getAttribute("start"))
 		self.end = int(element.getAttribute("end"))
@@ -71,7 +71,7 @@ class Marker:
 
 
 class Source:
-	def __init__(self, element):
+	def __init__(self, element, session):
 		self.id = int(element.getAttribute("id"))
 		self.name = element.getAttribute("name")
 	
@@ -80,7 +80,7 @@ class Source:
 
 
 class Diskstream:
-	def __init__(self, element):
+	def __init__(self, element, session):
 		self.id = int(element.getAttribute("id"))
 		self.playlist = element.getAttribute("playlist")
 		self.name = element.getAttribute("name")
@@ -90,7 +90,7 @@ class Diskstream:
 
 
 class Region:
-	def __init__(self, element):
+	def __init__(self, element, session):
 		self.id = int(element.getAttribute("id"))
 		self.name = element.getAttribute("name")
 		self.start = int(element.getAttribute("start"))
@@ -103,10 +103,11 @@ class Region:
 
 
 class Playlist:
-	def __init__(self, element):
+	def __init__(self, element, session):
 		self.name = element.getAttribute("name")
 		self.regions = {}
-		parse_ided(element, "Region", Region, self.regions)
+		self.session = session
+		parse_ided(element, "Region", Region, self.regions, session)
 
 	def dump(self):
 		print self.name + ":"
@@ -115,32 +116,8 @@ class Playlist:
 
 
 class Route:
-	def parse_order(self, element):
-		order_attr = element.getAttribute("order-keys")
-		if not order_attr:
-			return 0
-		for key_val in order_attr.split(":"):
-			pair = key_val.split("=")
-			key = pair[0]
-			value = pair[1]
-			if key == "editor":
-				return int(value)
-
-	def emit_rpp(self, out):
-		# Skip master, that's handled separately.
-		if self.name == "master":
-			return
-
-		fmt_vars = { "track": self }
-		fmt_vars["guid"] = "{" + str(uuid.uuid4()) + "}"
-		print >> out, track_header.format(**fmt_vars)
-		print >> out, track_footer
-
-	@property
-	def muted_int(self):
-		return 1 if self.muted else 0
-
-	def __init__(self, element):
+	def __init__(self, element, session):
+		self.session = session
 		self.name = ""
 		self.gain = 1.0
 		self.pan = 0.5
@@ -167,6 +144,31 @@ class Route:
 						if stream_panner:
 							self.pan = float(stream_panner.getAttribute("x"))
 
+	def parse_order(self, element):
+		order_attr = element.getAttribute("order-keys")
+		if not order_attr:
+			return 0
+		for key_val in order_attr.split(":"):
+			pair = key_val.split("=")
+			key = pair[0]
+			value = pair[1]
+			if key == "editor":
+				return int(value)
+
+	def emit_rpp(self, out):
+		# Skip master, that's handled separately.
+		if self.name == "master":
+			return
+
+		fmt_vars = { "track": self }
+		fmt_vars["guid"] = "{" + str(uuid.uuid4()) + "}"
+		print >> out, track_header.format(**fmt_vars)
+		print >> out, track_footer
+
+	@property
+	def muted_int(self):
+		return 1 if self.muted else 0
+
 	def dump(self):
 		print self.name, "[" + str(self.order) + "]:", self.diskstreamID, self.gain, self.pan
 		print " ", bool_dump(self.muted, "muted"), bool_dump(self.soloed, "soloed"), bool_dump(self.inverted, "inverted")
@@ -181,7 +183,7 @@ class Session:
 				continue
 			if not "IsMark" in marker_elt.getAttribute("flags"):
 				continue
-			self.markers.append(Marker(marker_elt))
+			self.markers.append(Marker(marker_elt, self))
 
 	def emit_rpp(self, out):
 		fmt_vars = { 'project': self }
@@ -224,15 +226,15 @@ class Session:
 				if name == "Locations":
 					self.parse_markers(element)
 				elif name == "Sources":
-					parse_ided(element, "Source", Source, self.sources)
+					parse_ided(element, "Source", Source, self.sources, self)
 				elif name == "Regions":
-					parse_ided(element, "Region", Region, self.regions)
+					parse_ided(element, "Region", Region, self.regions, self)
 				elif name == "DiskStreams":
-					parse_ided(element, "AudioDiskstream", Diskstream, self.diskstreams)
+					parse_ided(element, "AudioDiskstream", Diskstream, self.diskstreams, self)
 				elif name == "Playlists":
-					parse_named(element, "Playlist", Playlist, self.playlists)
+					parse_named(element, "Playlist", Playlist, self.playlists, self)
 				elif name == "Routes":
-					parse_list(element, "Route", Route, self.routes)
+					parse_list(element, "Route", Route, self.routes, self)
 			element = element.nextSibling
 
 		self.routes.sort(key = lambda route: route.order)
