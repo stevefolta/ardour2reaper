@@ -128,12 +128,12 @@ class Route:
 		guid = uuid.uuid4()
 		print >> out, """
   <TRACK '{guid}'
-    NAME "{this.name}"
+    NAME "{self.name}"
     PEAKCOL 16576
     BEAT -1
     AUTOMODE 1
-    VOLPAN {this.gain} 0.00000000000000 -1.00000000000000 -1.00000000000000 1.00000000000000
-    MUTESOLO 0 0 0
+    VOLPAN {self.gain} 0.00000000000000 -1.00000000000000 -1.00000000000000 1.00000000000000
+    MUTESOLO {self.muted_int} 0 0
     IPHASE 0
     ISBUS 0 0
     BUSCOMP 0 0
@@ -150,7 +150,11 @@ class Route:
     PERF 0
     MIDIOUT -1
     MAINSEND 1 0
-	>""".format(guid = guid, this = self)
+	>""".format(guid = guid, self = self)
+
+	@property
+	def muted_int(self):
+		return 1 if self.muted else 0
 
 	def __init__(self, element):
 		self.name = ""
