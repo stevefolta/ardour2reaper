@@ -1,4 +1,5 @@
 *.ardour
+instant.xml
 *.RPP
 
 # Stuff I used during my development, not applicable to anyone else:

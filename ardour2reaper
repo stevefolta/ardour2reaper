@@ -1,7 +1,7 @@
 #!/usr/bin/python2
 
 import xml.dom.minidom
-import sys, uuid
+import sys, uuid, string
 from collections import deque
 
 
@@ -81,9 +81,15 @@ class Source:
 
 class Diskstream:
 	def __init__(self, element, session):
+		self.session = session
 		self.id = int(element.getAttribute("id"))
 		self.playlist = element.getAttribute("playlist")
 		self.name = element.getAttribute("name")
+
+	def emit_rpp(self, out):
+		playlist = self.session.playlists.get(self.playlist, None)
+		if playlist:
+			playlist.emit_rpp(out)
 	
 	def dump(self):
 		print self.id, quote(self.playlist), quote(self.name)
@@ -91,12 +97,29 @@ class Diskstream:
 
 class Region:
 	def __init__(self, element, session):
+		self.session = session
 		self.id = int(element.getAttribute("id"))
 		self.name = element.getAttribute("name")
 		self.start = int(element.getAttribute("start"))
 		self.length = int(element.getAttribute("length"))
 		self.position = int(element.getAttribute("position"))
 		self.source = int(element.getAttribute("source-0"))
+
+	def emit_rpp(self, out):
+		source = self.session.sources[self.source]
+		filename = source.name
+		fmt_vars = {
+			"region": self,
+			"guid": "{" + str(uuid.uuid4()) + "}",
+			"iguid": "{" + str(uuid.uuid4()) + "}",
+			"position": self.session.reaper_time(self.position),
+			"length": self.session.reaper_time(self.length),
+			"soffs": self.session.reaper_time(self.start),
+			"filename": filename,
+			"filepath": "interchange/" + self.session.ardour_mangled_name() + "/audiofiles/" + filename,
+			}
+		# position, length, filename, filepath, soffs
+		print >> out, item_template.format(**fmt_vars)
 
 	def dump(self):
 		print self.id, quote(self.name), self.start, self.length, "pos:", self.position, "source:", self.source
@@ -108,6 +131,10 @@ class Playlist:
 		self.regions = {}
 		self.session = session
 		parse_ided(element, "Region", Region, self.regions, session)
+
+	def emit_rpp(self, out):
+		for region in self.regions.values():
+			region.emit_rpp(out)
 
 	def dump(self):
 		print self.name + ":"
@@ -176,13 +203,20 @@ class Route:
 		if self.name == "master":
 			return
 
-		# Emit.
+		# Emit track header.
 		fmt_vars = { "track": self }
 		fmt_vars["guid"] = "{" + str(uuid.uuid4()) + "}"
 		fmt_vars["pan"] = self.pan * 2.0 - 1.0
 			# Ardour pans are 0.0 - 1.0 (0.5 at center), Reaper is -1.0 - 1.0 (0.0 center)
 		fmt_vars["polarity"] = 1 if self.inverted else 0
 		print >> out, track_header.format(**fmt_vars)
+
+		# Emit diskstream/playlist/regions as items.
+		diskstream = self.session.diskstreams[self.diskstreamID]
+		if diskstream:
+			diskstream.emit_rpp(out)
+
+		# Finish emitting.
 		print >> out, track_footer
 
 		# Show unconverted elements.
@@ -216,6 +250,7 @@ class Session:
 
 		doc = xml.dom.minidom.parse(filename)
 		session = doc.documentElement
+		self.name = session.getAttribute("name")
 		self.sample_rate = int(session.getAttribute("sample-rate"))
 		element = session.firstChild
 		while element:
@@ -246,6 +281,16 @@ class Session:
 			if not "IsMark" in marker_elt.getAttribute("flags"):
 				continue
 			self.markers.append(Marker(marker_elt, self))
+	
+	def reaper_time(self, time):
+		# Ardour times are in samples, Reaper times are in seconds.
+		return float(time) / float(self.sample_rate)
+	
+	def ardour_mangled_name(self):
+		mangling = string.maketrans('.', '_')
+		# It turns out "self.name" is a Unicode string, not ASCII, which makes it
+		# harder to use translate()/maketrans().
+		return str(self.name).translate(mangling)
 
 	def emit_rpp(self, out):
 		fmt_vars = { 'project': self }
@@ -407,6 +452,32 @@ track_header = """
     MIDIOUT -1
     MAINSEND 1 0"""
 track_footer = """	>"""
+
+item_template = """
+    <ITEM
+      POSITION {position}
+      SNAPOFFS 0.00000000000000
+      LENGTH {length}
+      LOOP 1
+      ALLTAKES 0
+      SEL 0
+      FADEIN 1 0.010000 0.000000 1 0
+      FADEOUT 1 0.010000 0.000000 1 0
+      MUTE 0
+      IGUID {iguid}
+      IID 2
+      NAME "{filename}"
+      VOLPAN 1.000000 0.000000 1.000000 -1.000000
+      SOFFS {soffs}
+      PLAYRATE 1.00000000000000 1 0.00000000000000 -1
+      CHANMODE 0
+      GUID {guid}
+      RECPASS 1
+      <SOURCE WAVE
+        FILE "{filepath}"
+      >
+      TAKE NULL
+    >"""
 
 
 args = deque(sys.argv)
