@@ -61,10 +61,23 @@ def quote(str):
 
 class Marker:
 	def __init__(self, element, session):
+		self.session = session
 		self.name = element.getAttribute("name")
 		self.start = int(element.getAttribute("start"))
 		self.end = int(element.getAttribute("end"))
 		self.locked = bool_attribute(element, "locked")
+
+	def emit_rpp(self, out):
+		# Skip "start" and "end" markers.
+		if self.name == "start" or self.name == "end":
+			return
+
+		fmt_vars = {
+			'num': self.session.new_marker_number(),
+			'pos': self.session.reaper_time(self.start),
+			'name': self.name,
+			}
+		print >> out, '  MARKER {num} {pos} "{name}" 0 0'.format(**fmt_vars)
 
 	def dump(self):
 		print self.name, self.start, self.end, ("Locked" if self.locked else "Unlocked")
@@ -247,6 +260,7 @@ class Session:
 		self.playlists = {}
 		self.routes = []
 		self.unconverted = []
+		self.next_marker_number = 1
 
 		doc = xml.dom.minidom.parse(filename)
 		session = doc.documentElement
@@ -286,6 +300,11 @@ class Session:
 		# Ardour times are in samples, Reaper times are in seconds.
 		return float(time) / float(self.sample_rate)
 	
+	def new_marker_number(self):
+		number = self.next_marker_number
+		self.next_marker_number += 1
+		return number
+	
 	def ardour_mangled_name(self):
 		mangling = string.maketrans('.', '_')
 		# It turns out "self.name" is a Unicode string, not ASCII, which makes it
@@ -295,6 +314,8 @@ class Session:
 	def emit_rpp(self, out):
 		fmt_vars = { 'project': self }
 		print >> out, project_header.format(**fmt_vars)
+		for marker in self.markers:
+			marker.emit_rpp(out)
 		for track in self.routes:
 			track.emit_rpp(out)
 		print >> out, project_footer
