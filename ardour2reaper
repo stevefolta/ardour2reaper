@@ -225,7 +225,7 @@ class Route:
 		print >> out, track_header.format(**fmt_vars)
 
 		# Emit diskstream/playlist/regions as items.
-		diskstream = self.session.diskstreams[self.diskstreamID]
+		diskstream = self.session.diskstreams.get(self.diskstreamID)
 		if diskstream:
 			diskstream.emit_rpp(out)
 
